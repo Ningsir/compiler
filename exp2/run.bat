@@ -1,0 +1,1 @@
+bison -d exp.y&&flex lex.l&&gcc -o exp exp.tab.c lex.yy.c display.c semantic_analysis.c
