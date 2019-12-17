@@ -21,7 +21,7 @@ void display(struct ASTNode *,int);
 
 %type  <ptr> exp args ext_var_list var specifier external_definition
 %type  <ptr> function_declaration compound_statement params_list params_dec statement_list statement
-%type  <ptr> ext_def_list var_list array_assign value_list constant jump assign
+%type  <ptr> ext_def_list var_list value_list constant jump assign
 %token <int_value> _INT 
 %token <char_value> _CHAR 
 %token <type_id> ID	TYPE RELOP 
@@ -69,8 +69,6 @@ exp
     | ID LB exp RB  {$$=mknode(1,ARRAY_CALL,yylineno, $3);strcpy($$->type_id,$1);}
     | ID            {$$=mknode(0,ID,yylineno);strcpy($$->type_id,$1);}
     | constant      {$$=$1;}
-    /*| ID ASSIGNOP exp {$$=mknode(1,ASSIGNOP,yylineno,$3);strcpy($$->type_id, $1);}
-    | ID COMPASSIGN exp {$$=mknode(1,COMPASSIGN,yylineno,$3);strcpy($$->type_id, $1);strcpy($$->compassign_id, $2);}*/
     ;
 
 
@@ -98,15 +96,20 @@ var
     | ID   {$$=mknode(0,VAR_ID,yylineno);strcpy($$->type_id, $1);}
     | ID LB _INT RB ASSIGNOP LB value_list RB {$$=mknode(1,ARRAY_INIT,yylineno, $7);strcpy($$->type_id, $1); $$->int_value=$3;}
     ;
-
+    
+    /*
 array_assign
     : ID LB exp RB ASSIGNOP exp {$$=mknode(2,ARRAY_ELE_ASSIGN,yylineno, $3, $6);strcpy($$->type_id, $1);}
     | ID ASSIGNOP LB value_list RB {$$=mknode(1,ARRAY_ASSIGN,yylineno, $4);strcpy($$->type_id, $1);}
-    ;
+    ;*/
 
+    /*包括普通变量赋值、复合赋值、数组赋值*/
 assign
     : ID ASSIGNOP exp {$$=mknode(1,ASSIGNOP,yylineno,$3);strcpy($$->type_id, $1);}
     | ID COMPASSIGN exp {$$=mknode(1,COMPASSIGN,yylineno,$3);strcpy($$->type_id, $1);strcpy($$->compassign_id, $2);}
+    | ID LB exp RB ASSIGNOP exp {$$=mknode(2,ARRAY_ELE_ASSIGN,yylineno, $3, $6);strcpy($$->type_id, $1);}
+    | ID ASSIGNOP LB value_list RB {$$=mknode(1,ARRAY_ASSIGN,yylineno, $4);strcpy($$->type_id, $1);}
+    ;
 
 value_list
     : constant {$$=$1;}
@@ -149,7 +152,6 @@ statement_list
 statement
 	: compound_statement   {$$=$1;}
 	| exp SEMI  {$$=mknode(1,STM,yylineno, $1);}
-    | array_assign SEMI {$$=$1;}
     | assign SEMI {$$=$1;}
     | COMMENT       {$$=mknode(0,COMMENT,yylineno);strcpy($$->comment, $1);}
     | RETURN exp SEMI{$$=mknode(1,RETURN,yylineno, $2);}

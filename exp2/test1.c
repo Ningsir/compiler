@@ -1,6 +1,9 @@
-int test(float x, int y);
+int test(int x, int y);
 int test(int x, int y){
     return 1;
+}
+int test(int x, int y){
+    return 2;
 }
 int main(){
     int a = 10;

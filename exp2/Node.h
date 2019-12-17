@@ -58,7 +58,6 @@ struct codenode
 };
 
 struct ASTNode *mknode(int num, int kind, int pos, ...);
-struct symbol_table * init_table();
 void semantic_analysis0(struct ASTNode *T, struct symbol_table *table, int level);
 
 
