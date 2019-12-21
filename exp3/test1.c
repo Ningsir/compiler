@@ -1,3 +1,4 @@
+void test1();
 int test(int x, int y);
 int test(int x, int y){
     return 1;

@@ -1,3 +1,5 @@
+#ifndef __NODE__
+#define __NODE__
 #include "stdarg.h"
 #define MAXLENGTH 200
 typedef struct ASTNode {
@@ -7,7 +9,10 @@ typedef struct ASTNode {
 	char compassign_id[32];//复合赋值符号
 	int pos;//该节点的位置，用行数表示
 	int num;//子节点数量
+    char alias[32];
+    int table_index;
 	struct ASTNode *ptr[4];
+    struct codenode *code;
 	union {		
 		//节点表示的值
 		int int_value;
@@ -51,14 +56,16 @@ struct opn
 };
 
 struct codenode
-{ //三地址 TAC 代码结点,采用单链表存放中间语言代码
+{ //三地址 TAC 代码结点
     int op;
     struct opn opn1, opn2, result;
-    struct codenode *next, *prior;
+    struct codenode *next;
 };
 
 struct ASTNode *mknode(int num, int kind, int pos, ...);
-void semantic_analysis0(struct ASTNode *T, struct symbol_table *table, int level);
-struct symbol_table * init_table();
+void semantic_analysis0(struct ASTNode *T);
+void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level);
 
+
+#endif
 

@@ -1,31 +1,21 @@
-int a;
-int xx, xxx[4];
-//void test(int x, int y);
-void test(int x, int y){
-     int aa = 1;
-     aa = 2.0;
-     if(x > 2000){
-          return 1;
-     }
-     break;
-     int i[10];
-     float xx;
-     xx = i + 1;
-     i[xx] = xx + x;
-     while(i[10] > 10){
-          i--;
-          x *= x;
-          if (x > 1000){
-               break;
-          }else{
-               continue;
-          }
-     }
-     continue;
-     break;
-     //函数调用
-     test(x);
+int yy;
+float temp = 100.0;
+void test1(int x, int y){    
+      test1(x, y);
+      return;
 }
-int test1(){
-     return;
+int test(int x, int y){
+      if(x <= y){
+            x = y;
+      }else{
+            y = x;
+      }
+      if(y < 1){
+            y = x;
+      }
+      while(x < 100){
+            x = x - 1;
+      }
+      int i = test(x, y) + test(x, y);
+      return test(x, y) + 1;
 }

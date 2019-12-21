@@ -195,13 +195,13 @@ void display(struct ASTNode *T, int indent)
 		case TYPE:
 			printf("%*cTYPE： %s\n", indent, ' ', T->type_id);
 			break;
-		case _INT:
+		case CONST_INT:
 			printf("%*cINT： %d\n", indent, ' ', T->int_value);
 			break;
-		case _FLOAT:
+		case CONST_FLOAT:
 			printf("%*cFLOAT： %f\n", indent, ' ', T->float_value);
 			break;
-		case _CHAR:
+		case CONST_CHAR:
 			printf("%*cCHAR： %c\n", indent, ' ', T->char_value);
 			break;
 		//赋值语句

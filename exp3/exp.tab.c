@@ -108,12 +108,12 @@ void display(struct ASTNode *,int);
    /* Put the tokens into the symbol table, so that GDB and other debuggers
       know about them.  */
    enum yytokentype {
-     _INT = 258,
-     _CHAR = 259,
+     CONST_INT = 258,
+     CONST_CHAR = 259,
      ID = 260,
      TYPE = 261,
      RELOP = 262,
-     _FLOAT = 263,
+     CONST_FLOAT = 263,
      COMMENT = 264,
      COMPASSIGN = 265,
      _LP = 266,
@@ -553,10 +553,10 @@ static const yytype_uint8 yyrline[] =
    First, the terminals, then, starting at YYNTOKENS, nonterminals.  */
 static const char *const yytname[] =
 {
-  "$end", "error", "$undefined", "_INT", "_CHAR", "ID", "TYPE", "RELOP",
-  "_FLOAT", "COMMENT", "COMPASSIGN", "_LP", "RP", "LC", "RC", "LB", "RB",
-  "PLUS", "MINUS", "STAR", "DIV", "ASSIGNOP", "AND", "OR", "NOT",
-  "DPLUS_L", "DPLUS_R", "DMINUS_L", "DMINUS_R", "COMMA", "SEMI",
+  "$end", "error", "$undefined", "CONST_INT", "CONST_CHAR", "ID", "TYPE",
+  "RELOP", "CONST_FLOAT", "COMMENT", "COMPASSIGN", "_LP", "RP", "LC", "RC",
+  "LB", "RB", "PLUS", "MINUS", "STAR", "DIV", "ASSIGNOP", "AND", "OR",
+  "NOT", "DPLUS_L", "DPLUS_R", "DMINUS_L", "DMINUS_R", "COMMA", "SEMI",
   "ARRAY_CALL", "RETURN", "IF", "IF_ELSE", "WHILE", "RETURN_NULL",
   "FUNC_CALL", "ARGS", "EXT_VAR_DEF", "FUNC_DEC", "FUNC_DEF", "VAR_LIST",
   "VAR_ID", "VAR_INIT", "INIT_VALUE", "FUN_ID", "PARAMS_LIST", "PARAMS",
@@ -1608,7 +1608,7 @@ yyreduce:
 
 /* Line 1455 of yacc.c  */
 #line 45 "exp.y"
-    { /*printf("ROOT : \n");display($1,3);*/struct symbol_table *table=  init_table();semantic_analysis0((yyvsp[(1) - (1)].ptr), table, 0);;}
+    { /*printf("ROOT : \n");display($1,3);*/semantic_analysis0((yyvsp[(1) - (1)].ptr));;}
     break;
 
   case 3:
@@ -1895,21 +1895,21 @@ yyreduce:
 
 /* Line 1455 of yacc.c  */
 #line 120 "exp.y"
-    {(yyval.ptr)=mknode(0,_INT,yylineno);(yyval.ptr)->int_value=(yyvsp[(1) - (1)].int_value);(yyval.ptr)->type=_INT;;}
+    {(yyval.ptr)=mknode(0,CONST_INT,yylineno);(yyval.ptr)->int_value=(yyvsp[(1) - (1)].int_value);(yyval.ptr)->type=CONST_INT;;}
     break;
 
   case 44:
 
 /* Line 1455 of yacc.c  */
 #line 121 "exp.y"
-    {(yyval.ptr)=mknode(0,_FLOAT,yylineno);(yyval.ptr)->float_value=(yyvsp[(1) - (1)].float_value);(yyval.ptr)->type=_FLOAT;;}
+    {(yyval.ptr)=mknode(0,CONST_FLOAT,yylineno);(yyval.ptr)->float_value=(yyvsp[(1) - (1)].float_value);(yyval.ptr)->type=CONST_FLOAT;;}
     break;
 
   case 45:
 
 /* Line 1455 of yacc.c  */
 #line 122 "exp.y"
-    {(yyval.ptr)=mknode(0,_CHAR,yylineno);(yyval.ptr)->char_value=(yyvsp[(1) - (1)].char_value);(yyval.ptr)->type=_CHAR;;}
+    {(yyval.ptr)=mknode(0,CONST_CHAR,yylineno);(yyval.ptr)->char_value=(yyvsp[(1) - (1)].char_value);(yyval.ptr)->type=CONST_CHAR;;}
     break;
 
   case 46:

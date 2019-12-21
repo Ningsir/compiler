@@ -715,17 +715,17 @@ YY_RULE_SETUP
 case 2:
 YY_RULE_SETUP
 #line 26 "lex.l"
-{yylval.int_value=atoi(yytext); return _INT;}
+{yylval.int_value=atoi(yytext); return CONST_INT;}
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
 #line 28 "lex.l"
-{yylval.float_value=atof(yytext);return _FLOAT;}
+{yylval.float_value=atof(yytext);return CONST_FLOAT;}
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
 #line 30 "lex.l"
-{yylval.char_value=yytext[1];return _CHAR;}
+{yylval.char_value=yytext[1];return CONST_CHAR;}
 	YY_BREAK
 case 5:
 YY_RULE_SETUP

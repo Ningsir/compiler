@@ -23,11 +23,11 @@ int    [0-9]+
 float    ([0-9]*\.[0-9]+)|([0-9]+\.) 
 %%
 "//"[^\n]*      {int len = strlen(yytext); strncpy(yylval.comment, yytext + 2, len - 2);return COMMENT;}
-{int}       {yylval.int_value=atoi(yytext); return _INT;}
+{int}       {yylval.int_value=atoi(yytext); return CONST_INT;}
 
-{float}		{yylval.float_value=atof(yytext);return _FLOAT;}
+{float}		{yylval.float_value=atof(yytext);return CONST_FLOAT;}
 
-\'.\' 		{yylval.char_value=yytext[1];return _CHAR;}
+\'.\' 		{yylval.char_value=yytext[1];return CONST_CHAR;}
 
 "int"		{strcpy(yylval.type_id, yytext);
 				return TYPE;}

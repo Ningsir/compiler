@@ -22,10 +22,10 @@ void display(struct ASTNode *,int);
 %type  <ptr> exp args ext_var_list var specifier external_definition
 %type  <ptr> function_declaration compound_statement params_list params_dec statement_list statement
 %type  <ptr> ext_def_list var_list value_list constant jump assign
-%token <int_value> _INT 
-%token <char_value> _CHAR 
+%token <int_value> CONST_INT 
+%token <char_value> CONST_CHAR 
 %token <type_id> ID	TYPE RELOP 
-%token <float_value> _FLOAT
+%token <float_value> CONST_FLOAT
 %token <comment> COMMENT
 %token <compassign_id> COMPASSIGN
 %token _LP RP  LC RC LB RB PLUS MINUS STAR DIV ASSIGNOP AND OR NOT DPLUS_L DPLUS_R DMINUS_L DMINUS_R
@@ -42,7 +42,7 @@ void display(struct ASTNode *,int);
 
 %%
 program
-    : ext_def_list    { /*printf("ROOT : \n");display($1,3);*/struct symbol_table *table=  init_table();semantic_analysis0($1, table, 0);}
+    : ext_def_list    { /*printf("ROOT : \n");display($1,3);*/semantic_analysis0($1);}
     ;
 
 ext_def_list: {$$=NULL;}
@@ -91,10 +91,10 @@ ext_var_list
     ;
 
 var
-    : ID LB _INT RB {$$=mknode(0,ARRAY_ID,yylineno);strcpy($$->type_id, $1); $$->int_value=$3;}
+    : ID LB CONST_INT RB {$$=mknode(0,ARRAY_ID,yylineno);strcpy($$->type_id, $1); $$->int_value=$3;}
     | ID ASSIGNOP exp  {$$=mknode(1,VAR_INIT,yylineno, $3);strcpy($$->type_id, $1);}
     | ID   {$$=mknode(0,VAR_ID,yylineno);strcpy($$->type_id, $1);}
-    | ID LB _INT RB ASSIGNOP LB value_list RB {$$=mknode(1,ARRAY_INIT,yylineno, $7);strcpy($$->type_id, $1); $$->int_value=$3;}
+    | ID LB CONST_INT RB ASSIGNOP LB value_list RB {$$=mknode(1,ARRAY_INIT,yylineno, $7);strcpy($$->type_id, $1); $$->int_value=$3;}
     ;
     
     /*
@@ -117,9 +117,9 @@ value_list
     ;
 
 constant
-    : _INT{$$=mknode(0,_INT,yylineno);$$->int_value=$1;$$->type=_INT;}
-    | _FLOAT {$$=mknode(0,_FLOAT,yylineno);$$->float_value=$1;$$->type=_FLOAT;}
-    | _CHAR  {$$=mknode(0,_CHAR,yylineno);$$->char_value=$1;$$->type=_CHAR;}
+    : CONST_INT{$$=mknode(0,CONST_INT,yylineno);$$->int_value=$1;$$->type=CONST_INT;}
+    | CONST_FLOAT {$$=mknode(0,CONST_FLOAT,yylineno);$$->float_value=$1;$$->type=CONST_FLOAT;}
+    | CONST_CHAR  {$$=mknode(0,CONST_CHAR,yylineno);$$->char_value=$1;$$->type=CONST_CHAR;}
     ;
 
 specifier
