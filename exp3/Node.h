@@ -10,6 +10,7 @@ typedef struct ASTNode {
 	int pos;//该节点的位置，用行数表示
 	int num;//子节点数量
     char alias[32];
+    int offset;
     int table_index;
 	struct ASTNode *ptr[4];
     struct codenode *code;
@@ -30,7 +31,7 @@ struct symbol
     int paramnum;   //对函数适用，记录形式参数个数
     char alias[10]; //别名，为解决嵌套层次使用
     char flag;      //符号标记，函数：'F'    变量：'V'      参数：'P'    临时变量：'T', 数组：'A'
-    char offset;    //外部变量和局部变量在其静态数据区或活动记录中的偏移量，
+    int offset;    //外部变量和局部变量在其静态数据区或活动记录中的偏移量，
                     //或记录函数活动记录大小，目标代码生成时使用
     //函数入口等实验可能会用到的属性...
 };
@@ -51,8 +52,7 @@ struct opn
         char const_char;   //字符常数值，立即数
         char id[32];       //变量或临时变量的别名或标号字符串
     };
-    int level;  //变量的层号，0 表示是全局变量，数据保存在静态数据区
-    int offset; //偏移量，目标代码生成时用
+    int offset;
 };
 
 struct codenode

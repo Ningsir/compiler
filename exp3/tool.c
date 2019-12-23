@@ -1,13 +1,22 @@
 #include "tool.h"
 
+extern int cur_fun_pos; //当前函数名在符号表中的位置
+extern int jump;    //jump=1表示语义分析进入循环体中，此时可以使用break、continue语句
+extern bool has_return;
+extern bool in_if;
+extern bool in_while;
+extern int *offset;
+extern int *zero;
+
 struct symbol_table *init_table()
 {
     struct symbol_table *table = (struct symbol_table *)malloc(sizeof(struct symbol_table));
     table->index = -1;
     return table;
 }
-struct symbol create_symbol(char name[32], int level, char type[20], int paramnum, char alias[20], char flag)
+struct symbol create_symbol(char name[32], int level, char type[20], int paramnum, char alias[20], char flag, int *offset)
 {
+    
     struct symbol s;
     strcpy(s.name, name);
     s.level = level;
@@ -15,6 +24,7 @@ struct symbol create_symbol(char name[32], int level, char type[20], int paramnu
     s.paramnum = paramnum;
     strcpy(s.alias, alias);
     s.flag = flag;
+    s.offset = *offset;
     return s;
 }
 char *newAlias()
@@ -64,7 +74,9 @@ void insert_var_to_table(struct ASTNode *T, struct symbol_table *table, char var
     //普通变量
     if (T->kind == VAR_ID)
     {
-        s = create_symbol(var_name, level, var_type, -1, newAlias(), 'V');
+        
+        s = create_symbol(var_name, level, var_type, -1, newAlias(), 'V', offset);
+        *offset = *offset + 4;
     }
     //声明变量并进行初始化
     else if(T->kind == VAR_INIT){
@@ -73,23 +85,25 @@ void insert_var_to_table(struct ASTNode *T, struct symbol_table *table, char var
         if (t2 == -1 || t1 != t2){
             printf("\033[31m ERROR 14: row %d, 类型不匹配\n\033[0m", T->pos);
         }
-        else{
-            s = create_symbol(var_name, level, var_type, -1, newAlias(), 'V');
+        else{   
+            s = create_symbol(var_name, level, var_type, -1, newAlias(), 'V', offset);
+            *offset = *offset + 4;
         }
     }
     else
     { //数组
-        s = create_symbol(var_name, level, var_type, T->int_value, newAlias(), 'A');
+        s = create_symbol(var_name, level, var_type, T->int_value, newAlias(), 'A', offset);
+        *offset = *offset + 4 * T->int_value;
     }
     insert_symbol(s, table);
 }
 void display_table(struct symbol_table *table)
 {
-    printf("\033[34m%-20s%-20s%-20s%-20s%-20s%-20s\n\033[0m", "名称", "层号", "类型", "参数数量", "别名", "标记");
+    printf("\033[34m%-20s%-20s%-20s%-20s%-20s%-20s%-20s\n\033[0m", "名称", "层号", "类型", "参数数量", "别名", "标记", "offset");
     for (int i = 0; i <= table->index; i++)
     {
-        printf("%-20s%-15d%-20s%-15d%-20s%-20c\n",
-               table->symbols[i].name, table->symbols[i].level, table->symbols[i].type, table->symbols[i].paramnum, table->symbols[i].alias, table->symbols[i].flag);
+        printf("%-20s%-15d%-20s%-15d%-20s%-20c%-20d\n",
+               table->symbols[i].name, table->symbols[i].level, table->symbols[i].type, table->symbols[i].paramnum, table->symbols[i].alias, table->symbols[i].flag, table->symbols[i].offset);
     }
 }
 
@@ -210,12 +224,15 @@ int fun_def(struct ASTNode *T, struct symbol_table *table, int level){
         strcpy(return_type, T->ptr[0]->type_id);
         //函数名
         strcpy(fun_name, T->ptr[1]->type_id);
+        strcpy(T->ptr[1]->alias, fun_name);
         int fun_pos = search(fun_name, table);
         //函数没有声明，加入符号表
         if (fun_pos < 0)
-        {
-            struct symbol s = create_symbol(fun_name, 0, return_type, 0, newAlias(), 'F');
+        { 
+            struct symbol s = create_symbol(fun_name, 0, return_type, 0, newAlias(), 'F', offset);
+            *offset = *offset + 4;
             insert_symbol(s, table);
+            T->ptr[1]->offset = s.offset;
             cur_fun_pos = table->index;
         }else{
             //函数重定义
@@ -224,6 +241,7 @@ int fun_def(struct ASTNode *T, struct symbol_table *table, int level){
                 return ERROR;
             }else{
                 table->symbols[fun_pos].flag = 'F';
+                T->ptr[1]->offset = table->symbols[fun_pos].offset;
             }
         }
         memset(return_type, 0, sizeof(char) * 20);
@@ -243,10 +261,11 @@ int fun_def(struct ASTNode *T, struct symbol_table *table, int level){
                     printf("\033[31m ERROR 03: row:%d, 变量 %s 重复定义\n\033[0m", p->ptr[0]->pos, param_name);
                     return ERROR;
                 }
-                struct symbol s = create_symbol(param_name, level + 1, param_type, -1, newAlias(), 'P');
+                struct symbol s = create_symbol(param_name, level + 1, param_type, -1, newAlias(), 'P', offset);
+                *offset = *offset + 4;
                 insert_symbol(s, table);
                 strcpy(p->ptr[0]->alias, s.alias);//保留别名
-
+                p->ptr[0]->offset = s.offset;
             }
             else
             { //函数已经声明，判断参数是否匹配

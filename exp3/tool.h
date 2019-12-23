@@ -16,17 +16,21 @@
 #define ERROR -1
 #define SUCCESS 0
 
-static int cur_fun_pos; //当前函数名在符号表中的位置
-static int jump = 0;    //jump=1表示语义分析进入循环体中，此时可以使用break、continue语句
-static bool has_return = false;
-static bool in_if = false;
-static bool in_while = false;
+// static int cur_fun_pos; //当前函数名在符号表中的位置
+// static int jump = 0;    //jump=1表示语义分析进入循环体中，此时可以使用break、continue语句
+// static bool has_return = false;
+// static bool in_if = false;
+// static bool in_while = false;
+// int __t1 = 0;
+// int *offset = &__t1;
+// int __t2 = 0;
+// int *zero = &__t2;
 
 struct symbol_table * init_table();
 char *newAlias();
 char *newTemp();
 char *newLabel();
-struct symbol create_symbol(char name[32], int level, char type[20], int paramnum, char alias[20], char flag);
+struct symbol create_symbol(char name[32], int level, char type[20], int paramnum, char alias[20], char flag, int *offset);
 int assignType(struct ASTNode *T, struct symbol_table *table);
 void insert_symbol(struct symbol s, struct symbol_table *table);
 void insert_var_to_table(struct ASTNode *T, struct symbol_table *table, char var_type[20], char var_name[32], int level);

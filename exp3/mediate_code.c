@@ -2,6 +2,16 @@
 #include "stdio.h"
 #include "tool.h"
 
+extern int cur_fun_pos; //当前函数名在符号表中的位置
+extern int jump;    //jump=1表示语义分析进入循环体中，此时可以使用break、continue语句
+extern bool has_return;
+extern bool in_if;
+extern bool in_while;
+extern int *offset;
+extern int *zero;
+extern FILE *objectFile;
+static int count = -1;
+
 struct codenode *insert_label(struct codenode *tail)
 {
     static int count = 0;
@@ -17,7 +27,7 @@ struct codenode *insert_label(struct codenode *tail)
     tail = code;
     return tail;
 }
-//goto arg param function操作
+//goto label操作
 struct codenode *insert(struct codenode *tail, int op, char *name)
 {
     struct codenode *code = (struct codenode *)malloc(sizeof(struct codenode));
@@ -27,14 +37,25 @@ struct codenode *insert(struct codenode *tail, int op, char *name)
     tail = code;
     return tail;
 }
-
-struct codenode *insert_return(struct codenode *tail, int return_type, char *name)
+//arg param function操作
+struct codenode *insert1(struct codenode *tail, int op, struct ASTNode *T)
+{
+    struct codenode *code = (struct codenode *)malloc(sizeof(struct codenode));
+    code->op = op;
+    strcpy(code->result.id, T->alias);
+    code->result.offset = T->offset;
+    tail->next = code;
+    tail = code;
+    return tail;
+}
+struct codenode *insert_return(struct codenode *tail, int return_type, struct ASTNode *T)
 {
     struct codenode *code = (struct codenode *)malloc(sizeof(struct codenode));
     code->op = RETURN;
     code->result.type = return_type;
     if(return_type != TYPE_VOID){
-        strcpy(code->result.id, name);
+        strcpy(code->result.id, T->alias);
+        code->result.offset = T->offset;
     } 
     tail->next = code;
     tail = code;
@@ -47,7 +68,7 @@ struct codenode *insert_const(struct codenode *tail, struct ASTNode *T)
     struct codenode *code = (struct codenode *)malloc(sizeof(struct codenode));
     code->op = ASSIGNOP;
     code->result.kind = ID;
-    strcpy(code->result.id, newTemp());
+    strcpy(code->result.id, T->alias);
     code->opn1.kind = T->kind;
     if (T->kind == CONST_INT)
     {
@@ -61,6 +82,7 @@ struct codenode *insert_const(struct codenode *tail, struct ASTNode *T)
     {
         code->opn1.const_char = T->char_value;
     }
+    code->result.offset = T->offset;
     tail->next = code;
     tail = code;
     return tail;
@@ -73,8 +95,10 @@ struct codenode *insert_assignop(struct codenode *tail, struct ASTNode *T, struc
     code->result.kind = ID;
     int pos = reverse_search(T->type_id, table);
     strcpy(code->result.id, table->symbols[pos].alias);
+    code->result.offset = table->symbols[pos].offset;
     code->opn1.kind = ID;
     strcpy(code->opn1.id, T->ptr[0]->alias);
+    code->opn1.offset = T->ptr[0]->offset;
     tail->next = code;
     tail = code;
     return tail;
@@ -85,10 +109,13 @@ struct codenode *insert_basic_operation(struct codenode *tail, struct ASTNode *T
 {
     struct codenode *code = (struct codenode *)malloc(sizeof(struct codenode));
     code->op = T->kind;
-    strcpy(code->result.id, newTemp());
-    strcpy(T->alias, code->result.id);
+    strcpy(code->result.id, T->alias);
+    code->result.offset = T->offset;
     strcpy(code->opn1.id, T->ptr[0]->alias);
+    code->opn1.offset = T->ptr[0]->offset;
+
     strcpy(code->opn2.id, T->ptr[1]->alias);
+    code->opn2.offset = T->ptr[1]->offset;
     tail->next = code;
     tail = code;
     return tail;
@@ -100,6 +127,8 @@ struct codenode *insert_call(struct codenode *tail, int fun_type, char *fun_name
     strcpy(code->opn1.id, fun_name);
     if(fun_type != TYPE_VOID){
         strcpy(code->result.id, newTemp());
+        code->result.offset = *offset;
+        *offset = *offset + 4;
     }
     tail->next = code;
     tail = code;
@@ -136,13 +165,23 @@ struct codenode *insert_relop(struct codenode *tail, struct ASTNode *T)
         code->op = NGE;
     }
     strcpy(code->opn1.id, T->ptr[0]->alias);
+    code->opn1.offset = T->ptr[0]->offset;
     strcpy(code->opn2.id, T->ptr[1]->alias);
+    code->opn2.offset = T->ptr[1]->offset;
     strcpy(code->result.id, newLabel());
     tail->next = code;
     tail = code;
     return tail;
 }
-void display_code(struct codenode *head)
+char *getArgReg(){
+    char s[2];
+    itoa(++count, s, 10);
+    char *res = (char*)malloc(sizeof(char) * 5);
+    strcpy(res, "a");
+    strcat(res, s);
+    return res;
+}
+void display_code(struct codenode *head, FILE *file)
 {
     if (head == NULL)
     {
@@ -152,102 +191,151 @@ void display_code(struct codenode *head)
     switch (p->op)
     {
     case PLUS:
-        printf("%s := %s + %s\n", p->result.id, p->opn1.id, p->opn2.id);
-        display_code(p->next);
+        printf("%s(%d) := %s(%d) + %s(%d)\n", p->result.id, p->result.offset, p->opn1.id, p->opn1.offset, p->opn2.id, p->opn2.offset);
+        fprintf(file, "%s := %s + %s\n", p->result.id, p->opn1.id, p->opn2.id);
+        fprintf(objectFile, "lw $t1, %d($sp)\nlw $t2, %d($sp)\nadd $t3, $t1, $t2\nsw $t3, %d($sp)\n", p->opn1.offset, p->opn2.offset, p->result.offset);
+        display_code(p->next, file);
         break;
     case MINUS:
-        printf("%s := %s - %s\n", p->result.id, p->opn1.id, p->opn2.id);
-        display_code(p->next);
+        printf("%s(%d) := %s(%d) - %s(%d)\n", p->result.id, p->result.offset, p->opn1.id, p->opn1.offset, p->opn2.id, p->opn2.offset);
+        fprintf(file, "%s := %s - %s\n", p->result.id, p->opn1.id, p->opn2.id);
+        fprintf(objectFile, "lw $t1, %d($sp)\nlw $t2, %d($sp)\nsub $t3, $t1, $t2\nsw $t3, %d($sp)\n", p->opn1.offset, p->opn2.offset, p->result.offset);
+        display_code(p->next, file);
         break;
     case STAR:
-        printf("%s := %s * %s\n", p->result.id, p->opn1.id, p->opn2.id);
-        display_code(p->next);
+        printf("%s(%d) := %s(%d) * %s(%d)\n", p->result.id, p->result.offset, p->opn1.id, p->opn1.offset, p->opn2.id, p->opn2.offset);
+        fprintf(file, "%s := %s * %s\n", p->result.id, p->opn1.id, p->opn2.id);
+        fprintf(objectFile, "lw $t1, %d($sp)\nlw $t2, %d($sp)\nmul $t3, $t1, $t2\nsw $t3, %d($sp)\n", p->opn1.offset, p->opn2.offset, p->result.offset);
+        display_code(p->next, file);
         break;
     case DIV:
-        printf("%s := %s / %s\n", p->result.id, p->opn1.id, p->opn2.id);
-        display_code(p->next);
+        printf("%s(%d) := %s(%d) / %s(%d)\n", p->result.id, p->result.offset, p->opn1.id, p->opn1.offset, p->opn2.id, p->opn2.offset);
+        fprintf(file, "%s := %s / %s\n", p->result.id, p->opn1.id, p->opn2.id);
+        fprintf(objectFile, "lw $t1, %d($sp)\nlw $t2, %d($sp)\ndiv $t3, $t1, $t2\nsw $t3, %d($sp)\n", p->opn1.offset, p->opn2.offset, p->result.offset);
+        display_code(p->next, file);
         break;
     case COMPASSIGN:
         break;
     case ASSIGNOP:
         if (p->opn1.kind == ID)
         {
-            printf("%s := %s\n", p->result.id, p->opn1.id);
+            printf("%s(%d) := %s(%d)\n", p->result.id, p->result.offset, p->opn1.id, p->opn1.offset);
+            fprintf(file, "%s := %s\n", p->result.id, p->opn1.id);
+            fprintf(objectFile, "lw $t1, %d($sp)\nmove $t3, $t1\nsw $t3, %d($sp)\n", p->opn1.offset, p->result.offset);
         }
         if (p->opn1.kind == CONST_INT)
         {
-            printf("%s := #%d\n", p->result.id, p->opn1.const_int);
+            printf("%s(%d) := #%d\n", p->result.id, p->result.offset, p->opn1.const_int);
+            fprintf(file, "%s := #%d\n", p->result.id, p->opn1.const_int);
+            fprintf(objectFile, "li $t3, %d\nsw $t3, %d($sp)\n", p->opn1.const_int, p->result.offset);
         }
         if (p->opn1.kind == CONST_FLOAT)
         {
-            printf("%s := #%f\n", p->result.id, p->opn1.const_float);
+            printf("%s(%d) := #%f\n", p->result.id, p->result.offset, p->opn1.const_float);
+            fprintf(file, "%s := #%f\n", p->result.id, p->opn1.const_float);
         }
         if (p->opn1.kind == CONST_CHAR)
         {
-            printf("%s := #%c\n", p->result.id, p->opn1.const_char);
+            printf("%s(%d) := #%c\n", p->result.id, p->result.offset, p->opn1.const_char);
+            fprintf(file, "%s := #%c\n", p->result.id, p->opn1.const_char);
         }
-        display_code(p->next);
+        display_code(p->next, file);
         break;
     case FUNCTION:
-        printf("FUNCTION %s\n", p->result.id);
-        display_code(p->next);
+        printf("FUNCTION %s(%d)\n", p->result.id, p->result.offset);
+        fprintf(file, "FUNCTION %s\n", p->result.id);
+        fprintf(objectFile, "%s:\n", p->result.id);
+        count = -1;
+        display_code(p->next, file);
         break;
     case LABEL:
         printf("LABEL %s\n", p->result.id);
-        display_code(p->next);
+        fprintf(file, "LABEL %s\n", p->result.id);
+        fprintf(objectFile, "%s:\n", p->result.id);
+        display_code(p->next, file);
         break;
     case GOTO:
         printf("GOTO %s\n", p->result.id);
-        display_code(p->next);
+        fprintf(file, "GOTO %s\n", p->result.id);
+        fprintf(objectFile, "j %s\n", p->result.id);
+        display_code(p->next, file);
         break;
     case ARG:
-        printf("ARG %s\n", p->result.id);
-        display_code(p->next);
+        printf("ARG %s(%d)\n", p->result.id, p->result.offset);
+        fprintf(file, "ARG %s\n", p->result.id);
+        fprintf(objectFile, "lw $%s, %d($sp)\n", getArgReg(), p->result.offset);
+        display_code(p->next, file);
         break;
     case CALL:
+        //需要保存返回地址
         if(p->opn1.type == TYPE_VOID){
             printf("CALL %s\n", p->opn1.id);
+            fprintf(file, "CALL %s\n", p->opn1.id);
+            fprintf(objectFile, "sw $ra, %d($sp)\njal %s\nlw $ra, %d($sp)\n", p->opn1.offset, p->opn1.id, p->opn1.offset);
         }else{
-            printf("%s := CALL %s\n",p->result.id, p->opn1.id);
+            printf("%s(%d) := CALL %s\n",p->result.id,p->result.offset, p->opn1.id);
+            fprintf(file, "%s := CALL %s\n",p->result.id, p->opn1.id);
+            fprintf(objectFile, "sw $ra, %d($sp)\njal %s\nsw $v0, %d($sp)\nlw $ra, %d($sp)\n", p->opn1.offset, p->opn1.id, p->result.offset, p->opn1.offset);
         }
-        display_code(p->next);
+        count = -1;
+        display_code(p->next, file);
         break;
     case PARAM:
-        printf("PARAM %s\n", p->result.id);
-        display_code(p->next);
+        printf("PARAM %s(%d)\n", p->result.id, p->result.offset);
+        fprintf(file, "PARAM %s\n", p->result.id);
+        fprintf(objectFile, "sw $%s, %d($sp)\n", getArgReg(),p->result.offset);
+        if(p->next->op != PARAM){
+            count = -1;
+        }
+        display_code(p->next, file);
         break;
     case EQU:
-        printf("IF %s == %s GOTO %s\n", p->opn1.id, p->opn2.id, p->result.id);
-        display_code(p->next);
+        printf("IF %s(%d) == %s(%d) GOTO %s\n", p->opn1.id, p->opn1.offset, p->opn2.id,p->opn2.offset, p->result.id);
+        fprintf(file, "IF %s == %s GOTO %s\n", p->opn1.id, p->opn2.id, p->result.id);
+        fprintf(objectFile, "lw $t1, %d($sp)\nlw $t2, %d($sp)\nbeq $t1,$t2, %s\n", p->opn1.offset, p->opn2.offset, p->result.id);
+        display_code(p->next, file);
         break;
     case NE:
-        printf("IF %s != %s GOTO %s\n", p->opn1.id, p->opn2.id, p->result.id);
-        display_code(p->next);
+        printf("IF %s(%d) != %s(%d) GOTO %s\n", p->opn1.id, p->opn1.offset, p->opn2.id,p->opn2.offset, p->result.id);
+        fprintf(file, "IF %s != %s GOTO %s\n", p->opn1.id, p->opn2.id, p->result.id);
+        fprintf(objectFile, "lw $t1, %d($sp)\nlw $t2, %d($sp)\nbne $t1,$t2, %s\n", p->opn1.offset, p->opn2.offset, p->result.id);
+        display_code(p->next, file);
         break;
     case GT:
-        printf("IF %s > %s GOTO %s\n", p->opn1.id, p->opn2.id, p->result.id);
-        display_code(p->next);
+        printf("IF %s(%d) > %s(%d) GOTO %s\n", p->opn1.id, p->opn1.offset, p->opn2.id,p->opn2.offset, p->result.id);
+        fprintf(file, "IF %s > %s GOTO %s\n", p->opn1.id, p->opn2.id, p->result.id);
+        fprintf(objectFile, "lw $t1, %d($sp)\nlw $t2, %d($sp)\nbgt $t1,$t2, %s\n", p->opn1.offset, p->opn2.offset, p->result.id);
+        display_code(p->next, file);
         break;
     case NG:
-        printf("IF %s <= %s GOTO %s\n", p->opn1.id, p->opn2.id, p->result.id);
-        display_code(p->next);
+        printf("IF %s(%d) <= %s(%d) GOTO %s\n", p->opn1.id, p->opn1.offset, p->opn2.id,p->opn2.offset, p->result.id);
+        fprintf(file, "IF %s <= %s GOTO %s\n", p->opn1.id, p->opn2.id, p->result.id);
+        fprintf(objectFile, "lw $t1, %d($sp)\nlw $t2, %d($sp)\nblt $t1,$t2, %s\n", p->opn1.offset, p->opn2.offset, p->result.id);
+        display_code(p->next, file);
         break;
     case GTE:
-        printf("IF %s >= %s GOTO %s\n", p->opn1.id, p->opn2.id, p->result.id);
-        display_code(p->next);
+        printf("IF %s(%d) >= %s(%d) GOTO %s\n", p->opn1.id, p->opn1.offset, p->opn2.id,p->opn2.offset, p->result.id);
+        fprintf(file, "IF %s >= %s GOTO %s\n", p->opn1.id, p->opn2.id, p->result.id);
+        fprintf(objectFile, "lw $t1, %d($sp)\nlw $t2, %d($sp)\nbge $t1,$t2, %s\n", p->opn1.offset, p->opn2.offset, p->result.id);
+        display_code(p->next, file);
         break;
     case NGE:
-        printf("IF %s < %s GOTO %s\n", p->opn1.id, p->opn2.id, p->result.id);
-        display_code(p->next);
+        printf("IF %s(%d) < %s(%d) GOTO %s\n", p->opn1.id, p->opn1.offset, p->opn2.id,p->opn2.offset, p->result.id);
+        fprintf(file, "IF %s < %s GOTO %s\n", p->opn1.id, p->opn2.id, p->result.id);
+        fprintf(objectFile, "lw $t1, %d($sp)\nlw $t2, %d($sp)\nble $t1,$t2, %s\n", p->opn1.offset, p->opn2.offset, p->result.id);
+        display_code(p->next, file);
         break;
     case RETURN:
         if(p->result.type != TYPE_VOID){
-            printf("RETURN %s\n", p->result.id);
+            printf("RETURN %s(%d)\n", p->result.id, p->result.offset);
+            fprintf(file, "RETURN %s\n", p->result.id);
+            fprintf(objectFile, "lw $v0, %d($sp)\njr $ra\n", p->result.offset);
         }else
         {
            printf("RETURN\n");
+           fprintf(file, "RETURN\n");
         }
-        display_code(p->next);
+        display_code(p->next, file);
         break;
     default:
         break;

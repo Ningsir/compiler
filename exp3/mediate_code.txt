@@ -1,0 +1,30 @@
+FUNCTION test
+PARAM v1
+temp0 := #1
+v2 := temp0
+LABEL label0
+temp1 := #0
+IF v1 >= temp1 GOTO label1
+GOTO label2
+LABEL label1
+temp2 := #0
+IF v1 == temp2 GOTO label3
+GOTO label4
+LABEL label3
+GOTO label2
+LABEL label4
+temp3 := v2 * v1
+v2 := temp3
+temp4 := #1
+temp5 := v1 - temp4
+v1 := temp5
+GOTO label0
+LABEL label2
+RETURN v2
+FUNCTION main
+temp6 := #6
+ARG temp6
+temp7 := CALL test
+v4 := temp7
+temp8 := #1
+RETURN temp8

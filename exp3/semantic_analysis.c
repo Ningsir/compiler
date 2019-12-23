@@ -1,9 +1,12 @@
 #include "tool.h"
 #include "mediate_code.h"
+#include "global.h"
 
 //存储中间代码链表的头节点、尾节点
 struct codenode *head;
 struct codenode *tail;
+char breakLabel[32];
+char continueLabel[32];
 
 bool has_error = false;
 void code_init()
@@ -16,11 +19,19 @@ void code_init()
 void semantic_analysis0(struct ASTNode *T)
 {
     struct symbol_table *table = init_table(); //初始化符号表
-    code_init();                               //TAC初始化
+    code_init(); 
+    //TAC初始化
     semantic_analysis(T, table, 0);
     if (has_error == false)
     {
-        display_code(head->next);
+        FILE *file = fopen("mediate_code.txt", "w+");
+        objectFile = fopen("object_code.asm", "w+");
+        if(file == NULL || objectFile == NULL){
+        printf("文件打开错误！\n");
+        exit(0);
+        }
+        fprintf(objectFile, ".globl main0 \n.text\nmain0: \njal main \nli $v0,10\nsyscall\n");
+        display_code(head->next, file);
     }
 }
 
@@ -165,6 +176,7 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
         tail = insert_call(tail, fun_type, T->type_id);
         if(tail->opn1.type != TYPE_VOID){
             strcpy(T->alias, tail->result.id);
+            T->offset = tail->result.offset;
         } 
         break;
     }
@@ -189,7 +201,7 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
         break;
     case ARGS:
         semantic_analysis(T->ptr[0], table, level);
-        tail = insert(tail, ARG, T->ptr[0]->alias);
+        tail = insert1(tail, ARG, T->ptr[0]);
         if(T->num == 2){
             semantic_analysis(T->ptr[1], table, level);
         }
@@ -208,7 +220,8 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
         }
         else
         {
-            struct symbol s = create_symbol(fun_name, level, return_type, 0, newAlias(), 'f');
+            struct symbol s = create_symbol(fun_name, level, return_type, 0, newAlias(), 'f', offset);
+            *offset = *offset + 4;
             insert_symbol(s, table);
             cur_fun_pos = table->index;
         }
@@ -220,7 +233,8 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
         {
             strcpy(param_name, p->ptr[0]->type_id);
             strcpy(param_type, p->ptr[0]->ptr[0]->type_id);
-            struct symbol s = create_symbol(param_name, level + 1, param_type, -1, newAlias(), 'P');
+            struct symbol s = create_symbol(param_name, level + 1, param_type, -1, newAlias(), 'P', offset);
+            *offset = *offset + 4;
             insert_symbol(s, table);
             p = p->ptr[1];
             memset(param_name, 0, sizeof(char) * 32); //数组清零
@@ -233,18 +247,24 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
     //函数定义：参数要与声明的函数参数匹配
     case FUNC_DEF:
     {
+        // printf("1:%d\n", *offset);
         int res = fun_def(T, table, level);
+        printf("fun: %d\n",  cur_fun_pos);
+        // printf("2:%d\n", *offset);
         if(res == ERROR){
             has_error = true;
             exit(0);
         }
         cur_fun_pos = reverse_search(T->ptr[1]->type_id, table);
         pos = table->index;
-        tail = insert(tail, FUNCTION, T->ptr[1]->type_id);
+        tail = insert1(tail, FUNCTION, T->ptr[1]);
+        struct codenode *temp = tail;
         //形参列表
         semantic_analysis(T->ptr[1], table, level + 1);
         //进入函数体
-        semantic_analysis(T->ptr[2], table, level + 1); 
+        semantic_analysis(T->ptr[2], table, level + 1);
+        //函数空间大小
+        // temp->result.offset = table->symbols[table->index].offset - table->symbols[cur_fun_pos + 1].offset;
         table->index = pos; //删除函数中定义的局部变量，包括形参
         if (has_return == false && getType(T->ptr[0]->type_id) != TYPE_VOID)
         {
@@ -274,7 +294,7 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
         break;
     case PARAMS:
         // pos = search(T->type_id, table);
-        tail = insert(tail, PARAM, T->alias);
+        tail = insert1(tail, PARAM, T);
         // printf("PARAM %s\n", tail->result.id);
         break;
     case STM_LIST:
@@ -333,7 +353,7 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
             }
             //return结果
             semantic_analysis(T->ptr[0], table, level);
-            tail = insert_return(tail, fun_return_type, T->ptr[0]->alias);
+            tail = insert_return(tail, fun_return_type, T->ptr[0]);
         }
         break;
     }
@@ -344,7 +364,7 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
             has_error = true;
             exit(0);
         }
-        tail = insert_return(tail, TYPE_VOID, " ");
+        tail = insert_return(tail, TYPE_VOID, T);
         if (in_if == false && in_while == false)
         {
             has_return = true;
@@ -366,20 +386,29 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
     case INIT_VALUE:
         break;
     case IF:
+    {
         pos = table->index;
+        int temp = *offset;
         semantic_analysis(T->ptr[0], table, level + 1);
         in_if = true;
+        char ifLabel[32];
+        strcpy(ifLabel, newLabel());
+        tail = insert(tail, GOTO, ifLabel);
         tail = insert(tail, LABEL, T->ptr[0]->alias);
+        //if复合体
         semantic_analysis(T->ptr[1], table, level + 1);
-        tail = insert(tail, LABEL, newLabel());
+        tail = insert(tail, LABEL, ifLabel);
         in_if = false;
+        *offset = temp;
         // printf("\nIF:\n");
         // display_table(table);
         table->index = pos;
         break;
+    }
     case IF_ELSE:
     {
         pos = table->index;
+        int temp = *offset;
         //条件
         semantic_analysis(T->ptr[0], table, level + 1);
         in_if = true;
@@ -389,40 +418,54 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
         tail = insert(tail, LABEL, T->ptr[0]->alias);
         //if
         semantic_analysis(T->ptr[1], table, level + 1);
+        *offset = temp;
         table->index = pos;
         pos = table->index;
         tail = insert(tail, LABEL, elseLabel);
         //else
         semantic_analysis(T->ptr[2], table, level + 1);
         in_if = false;
+        *offset = temp;
         table->index = pos;
         break;
     }
     case WHILE:
+    {
         pos = table->index;
+        int temp = *offset;
+        char inWhileLabel[32];
+        strcpy(inWhileLabel, newLabel());
+        tail = insert(tail, LABEL, inWhileLabel);//while label
         semantic_analysis(T->ptr[0], table, level + 1); //条件
         char outWhileLabel[32];
         strcpy(outWhileLabel, newLabel());
+        strcpy(breakLabel, outWhileLabel);
+        strcpy(continueLabel, inWhileLabel);
         tail = insert(tail, GOTO, outWhileLabel);//条件不成立跳出while循环
         tail = insert(tail, LABEL, T->ptr[0]->alias);//while循环体的label
         jump = 1;
         in_while = true;
         semantic_analysis(T->ptr[1], table, level + 1); //while复合体
-        tail = insert(tail, GOTO, T->ptr[0]->alias);//跳转到循环开始处
+        tail = insert(tail, GOTO, inWhileLabel);//跳转到循环开始处
         tail = insert(tail, LABEL, outWhileLabel);
         in_while = false;
+        *offset = temp;
         jump = 0;
         // printf("\nWHILE:\n");
         // display_table(table);
         table->index = pos;
         break;
+    }
     case CONTINUE:
         if (jump == 0)
         {
             printf("\033[31m ERROR 19: row %d, continue语句必须在循环中使用\n\033[0m", T->pos);
             has_error = true;
             exit(0);
+        }else{
+            tail = insert(tail, GOTO, continueLabel);
         }
+        
         break;
     case BREAK:
         if (jump == 0)
@@ -430,6 +473,8 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
             printf("\033[31m ERROR 18: row %d, break语句必须在循环中使用\n\033[0m", T->pos);
             has_error = true;
             exit(0);
+        }else{
+            tail = insert(tail, GOTO, breakLabel);
         }
         break;
     case ARRAY_ID:
@@ -455,7 +500,7 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
             has_error = true;
             exit(0);
         }
-        // T->table_index = pos;
+        T->offset = table->symbols[pos].offset;
         strcpy(T->alias, table->symbols[pos].alias);
         break;
     //类型，比如int，float
@@ -464,9 +509,10 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
     case CONST_INT:
     case CONST_FLOAT:
     case CONST_CHAR:
+        strcpy(T->alias, newTemp());
+        T->offset = *offset;
+        *offset = *offset + 4;
         tail = insert_const(tail, T);
-        strcpy(T->alias, tail->result.id);
-        // printf("%s := #%d\n", tail->result.id, tail->opn1.const_int);
         break;
     //赋值语句
     case COMPASSIGN:
@@ -575,7 +621,11 @@ void semantic_analysis(struct ASTNode *T, struct symbol_table *table, int level)
         }
         semantic_analysis(T->ptr[0], table, level);
         semantic_analysis(T->ptr[1], table, level);
+        strcpy(T->alias, newTemp());
+        T->offset = *offset;
+        *offset = *offset + 4;
         tail = insert_basic_operation(tail, T);
+         
         // printf("%s := %s %s\n", tail->result.id, tail->opn1.id, tail->opn2.id);
         break;
     //一元运算符
